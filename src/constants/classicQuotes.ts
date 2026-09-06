@@ -1,4 +1,4 @@
-import { PosterScene } from '../engine/posterEngine.ts';
+import { PosterScene } from '../types';
 
 export interface ClassicQuotePreset {
   name: string;

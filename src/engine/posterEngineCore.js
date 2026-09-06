@@ -211,17 +211,34 @@ function vrule(c, env, sx, y1, y2, col, d) {
 }
 function text(c, env, txt, sx, y, size, col, d, opt) {
   opt = opt || {}; if (sx < -1200 || sx > W + 1200) return; const p = enter(sx, d); if (p <= 0) return;
-  c.save(); c.globalAlpha = p * (opt.alpha == null ? 1 : opt.alpha); c.font = (opt.weight || 700) + ' ' + size + 'px ' + (opt.font || F_SERIF);
-  c.fillStyle = col; c.textAlign = opt.align || 'left'; c.textBaseline = 'alphabetic';
+  c.save(); c.globalAlpha = p * (opt.alpha == null ? 1 : opt.alpha); 
+  let actualSize = size;
+  const maxW = opt.maxWidth || (opt.align === 'center' ? W - 160 : Math.max(160, W - 80 - sx));
+  c.font = (opt.weight || 700) + ' ' + actualSize + 'px ' + (opt.font || F_SERIF);
   try { c.letterSpacing = (opt.spacing || 0) + 'px'; } catch (e) { }
+  if (txt && maxW) {
+    const m = c.measureText(txt).width;
+    if (m > maxW) {
+      actualSize = Math.max(16, Math.floor(actualSize * (maxW / m)));
+      c.font = (opt.weight || 700) + ' ' + actualSize + 'px ' + (opt.font || F_SERIF);
+    }
+  }
+  c.fillStyle = col; c.textAlign = opt.align || 'left'; c.textBaseline = 'alphabetic';
   c.fillText(txt, sx, y - (1 - p) * 22); c.restore();
 }
 function vtext(c, env, txt, sx, y0, size, step, col, d, opt) {
   opt = opt || {}; if (sx < -200 || sx > W + 200) return; const base = (W + 40 - sx - (d || 0)) / 260; if (base <= 0) return;
-  const chars = [...txt]; c.save(); c.font = (opt.weight || 400) + ' ' + size + 'px ' + (opt.font || F_KAI); c.textAlign = 'center'; c.textBaseline = 'middle';
+  const chars = [...txt]; 
+  const maxH = opt.maxHeight || (1440 - y0);
+  let actualStep = step, actualSize = size;
+  if (chars.length * actualStep > maxH) {
+    actualStep = Math.max(20, Math.floor(maxH / Math.max(chars.length, 1)));
+    actualSize = Math.min(actualSize, Math.round(actualStep * 0.86));
+  }
+  c.save(); c.font = (opt.weight || 400) + ' ' + actualSize + 'px ' + (opt.font || F_KAI); c.textAlign = 'center'; c.textBaseline = 'middle';
   chars.forEach((ch, i) => {
     const p = Eo(cl(base - i * (opt.stagger == null ? .09 : opt.stagger))); if (p <= 0) return;
-    c.save(); c.globalAlpha = Math.min(1, p * 1.4) * (opt.alpha == null ? 1 : opt.alpha); c.translate(sx, y0 + i * step - (1 - p) * 26);
+    c.save(); c.globalAlpha = Math.min(1, p * 1.4) * (opt.alpha == null ? 1 : opt.alpha); c.translate(sx, y0 + i * actualStep - (1 - p) * 26);
     const k = opt.pop === false ? 1 : 1.3 - .3 * Eo(p); c.scale(k, k);
     if (opt.shadow) { c.fillStyle = env.accA(.22); c.fillText(ch, 3, 4); }
     c.fillStyle = col; c.fillText(ch, 0, 0); c.restore();
@@ -292,77 +309,121 @@ function scrollPaper(c, env, sx, y, w, h, d) {
   roller(sx + w); roller(sx + w - ww); c.restore(); return p;
 }
 
-/* ---------- 六种排版 ---------- */
+/* ---------- 六种排版 (严格防止图文遮挡与溢出) ---------- */
 const LAYOUT_FN = {
   popH(B) {
-    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); const size = Math.min(170, Math.floor(780 / Math.max(n, 3))); const step = size * 1.04; const lx0 = 250; const span = step * (n - 1);
-    tag(c, env, X(160), 330, s.label + ' · ' + s.name, 0);
-    const offs = [0, 55, -28, 45, 8, 62, -12, 40, 20, 50, -20, 30];
-    chars.forEach((ch, i) => bigChar(c, env, ch, X(lx0 + i * step), 470 + offs[i % offs.length] * size / 170, size, ink, i * 6, (hash(i + s.idx) - .5) * .07));
-    brush(c, env, X(lx0 - size * .45), X(lx0 + span + size * .5), 470 + size * .5 + 42, acc, 90);
-    const cx = lx0 + span * .72 + (n < 5 ? 260 : 130), r = 215;
-    picture(c, env, img, X(cx - r), 870 - r, r * 2, r * 2, 'circle', 60, { stroke: ink });
-    text(c, env, s.sub, X(lx0 + 6), 1195, 60, ink, 40, { spacing: 4 });
-    text(c, env, s.source, X(lx0 + 8), 1262, 30, ink, 20, { font: F_SANS, weight: 500, alpha: .72 });
-    seal(c, env, X(cx + 150), 1205, s.seal, 0, 64);
+    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); 
+    const size = Math.min(145, Math.floor(660 / Math.max(n, 3))); const step = size * 1.02; const lx0 = 230; const span = step * (n - 1);
+    tag(c, env, X(150), 330, s.label + ' · ' + s.name, 0);
+    const offs = [0, 36, -20, 28, 6, 40, -10, 25, 12, 32, -14, 20];
+    chars.forEach((ch, i) => bigChar(c, env, ch, X(lx0 + i * step), 460 + (offs[i % offs.length] * size / 145), size, ink, i * 6, (hash(i + s.idx) - .5) * .07));
+    brush(c, env, X(lx0 - size * .4), X(lx0 + span + size * .45), 460 + size * .5 + 32, acc, 90);
+    
+    // Circular image placed below characters in a dedicated non-overlapping visual zone
+    const r = 180; 
+    const cx = Math.min(840, Math.max(680, lx0 + span * .5 + 130));
+    const cy = 840;
+    picture(c, env, img, X(cx - r), cy - r, r * 2, r * 2, 'circle', 60, { stroke: ink });
+    
+    // Subtitle and source placed safely to avoid collision with circle and seal
+    text(c, env, s.sub, X(lx0), 1140, 52, ink, 40, { spacing: 3, maxWidth: Math.max(280, cx - r - lx0 - 20) });
+    text(c, env, s.source, X(lx0 + 2), 1205, 28, ink, 20, { font: F_SANS, weight: 500, alpha: .72, maxWidth: 460 });
+    seal(c, env, X(Math.min(940, cx + 50)), 1150, s.seal, 0, 60);
   },
   vertical(B) {
-    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); const step = Math.min(118, Math.floor(830 / n)); const size = Math.min(104, Math.round(step * .88)); const lx = 250, y0 = 360;
-    tag(c, env, X(lx - 96), 340, s.label + ' · ' + s.name, 0);
-    vtext(c, env, chars.join(''), X(lx), y0, size, step, ink, 0, { shadow: true });
-    vrule(c, env, X(lx + 78), y0 - 30, y0 + step * (n - 1) + 48, acc, 30);
-    picture(c, env, img, X(lx + 190), 400, 380, 470, 'rect', 60, { stroke: ink, r: 18 });
-    text(c, env, s.sub, X(lx + 190), 1010, 52, ink, 40, { spacing: 3 });
-    text(c, env, s.source, X(lx + 192), 1080, 28, ink, 20, { font: F_SANS, weight: 500, alpha: .72 });
-    seal(c, env, X(lx + 190 + 380 - 34), 1140, s.seal, 0, 60);
+    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); 
+    const step = Math.min(108, Math.floor(760 / n)); const size = Math.min(92, Math.round(step * .86)); const lx = 220, y0 = 360;
+    tag(c, env, X(130), 340, s.label + ' · ' + s.name, 0);
+    vtext(c, env, chars.join(''), X(lx), y0, size, step, ink, 0, { shadow: true, maxHeight: 780 });
+    vrule(c, env, X(lx + 70), y0 - 30, y0 + step * (n - 1) + 45, acc, 30);
+    
+    // Picture on right with strict right-margin clearance (X: 400 to 790 <= 1080)
+    const pw = 390, ph = 480;
+    picture(c, env, img, X(lx + 180), 380, pw, ph, 'rect', 60, { stroke: ink, r: 16 });
+    
+    // Subtitle & source strictly aligned to picture column with maxWidth
+    text(c, env, s.sub, X(lx + 180), 940, 46, ink, 40, { spacing: 3, maxWidth: pw + 50 });
+    text(c, env, s.source, X(lx + 182), 1005, 26, ink, 20, { font: F_SANS, weight: 500, alpha: .72, maxWidth: pw + 50 });
+    seal(c, env, X(lx + 180 + pw - 40), 1070, s.seal, 0, 58);
   },
   stair(B) {
-    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); const size = Math.min(150, Math.floor(1000 / (0.85 * (n - 1) + 1))); const dx = size * .86, dy = size * .6, lx0 = 230;
-    chars.forEach((ch, i) => bigChar(c, env, ch, X(lx0 + i * dx), 410 + i * dy, size, ink, i * 4, (hash(i * 3 + s.idx) - .5) * .06));
-    brush(c, env, X(lx0 - 60), X(lx0 + (n - 1) * dx + size * .7), 410 + (n - 1) * dy + size * .55 + 18, acc, 60);
-    vtext(c, env, s.source.replace(/^[—\-\s]+/, ''), X(lx0 + 8), 520, 26, 32, ink, 20, { font: F_SANS, weight: 500, alpha: .72, pop: false, stagger: .04 });
-    picture(c, env, img, X(lx0 - 10), 900, 310, 400, 'arch', 60, { stroke: ink });
-    text(c, env, s.sub, X(lx0 + 360), 1130, 56, ink, 30, { spacing: 3 });
-    tag(c, env, X(lx0 + 360), 1170, s.label + ' · ' + s.name, 0);
-    seal(c, env, X(lx0 + 430), 1240, s.seal, 0, 62);
+    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); 
+    tag(c, env, X(140), 340, s.label + ' · ' + s.name, 0);
+    
+    // Stair bounds strictly clamped to prevent right-edge overflow
+    const lx0 = 220;
+    const dx = Math.min(115, Math.floor(580 / Math.max(n - 1, 1)));
+    const dy = Math.min(75, Math.floor(380 / Math.max(n - 1, 1)));
+    const size = Math.min(130, Math.floor(dx * 1.15));
+    chars.forEach((ch, i) => bigChar(c, env, ch, X(lx0 + i * dx), 420 + i * dy, size, ink, i * 4, (hash(i * 3 + s.idx) - .5) * .06));
+    brush(c, env, X(lx0 - 40), X(lx0 + (n - 1) * dx + size * .6), 420 + (n - 1) * dy + size * .52 + 14, acc, 60);
+    
+    // Left: arch picture below stairs; Right: subtitle, source, seal (no overlapping tag!)
+    const pw = 310, ph = 380;
+    picture(c, env, img, X(200), 840, pw, ph, 'arch', 60, { stroke: ink });
+    
+    const tx = 560;
+    text(c, env, s.sub, X(tx), 980, 48, ink, 30, { spacing: 3, maxWidth: 440 });
+    text(c, env, s.source, X(tx), 1045, 26, ink, 20, { font: F_SANS, weight: 500, alpha: .72, maxWidth: 440 });
+    seal(c, env, X(tx + 50), 1130, s.seal, 0, 58);
   },
   card(B) {
-    const { c, env, s, X, chars, img } = B; const n = Math.max(chars.length, 1); const lx0 = 250, cy = 360, cw = 620, ch = 790;
-    tag(c, env, X(lx0 - 60), 340, s.label + ' · ' + s.name, 0);
+    const { c, env, s, X, chars, img } = B; const n = Math.max(chars.length, 1); 
+    const lx0 = 220, cy = 340, cw = 640, ch = 820;
+    tag(c, env, X(140), 320, s.label + ' · ' + s.name, 0);
     paperCard(c, env, X(lx0), cy, cw, ch, 0);
-    const size = Math.min(92, Math.floor(560 / n)), step = Math.min(size * 1.12, Math.floor(600 / n));
-    vtext(c, env, chars.join(''), X(lx0 + 470), cy + 90, size, step, DARK, 40, { shadow: true });
-    vrule(c, env, X(lx0 + 400), cy + 60, cy + 60 + step * (n - 1) + 60, env.acc, 70);
-    vtext(c, env, strip(s.sub), X(lx0 + 330), cy + 130, 50, 60, DARK, 80, { font: F_SERIF, weight: 700, alpha: .82, pop: false, stagger: .06 });
-    text(c, env, s.source, X(lx0 + 60), cy + ch - 60, 26, DARK, 60, { font: F_SANS, weight: 500, alpha: .7 });
-    seal(c, env, X(lx0 + 120), cy + ch - 170, s.seal, 40, 66);
-    picture(c, env, img, X(lx0 + cw - 150), cy - 120, 300, 300, 'circle', 30, { stroke: DARK });
+    
+    // Left half of card: Arch picture and metadata (completely contained in card)
+    const pw = 240, ph = 320;
+    picture(c, env, img, X(lx0 + 40), cy + 70, pw, ph, 'arch', 30, { stroke: DARK, r: 12 });
+    text(c, env, s.source, X(lx0 + 40), cy + ch - 110, 24, DARK, 60, { font: F_SANS, weight: 500, alpha: .75, maxWidth: 360 });
+    seal(c, env, X(lx0 + 80), cy + ch - 55, s.seal, 40, 54);
+    
+    // Right half of card: Vertical quotes and subtitle with ample separation
+    const size = Math.min(84, Math.floor(520 / n)), step = Math.min(size * 1.12, Math.floor(560 / n));
+    vtext(c, env, chars.join(''), X(lx0 + cw - 80), cy + 80, size, step, DARK, 40, { shadow: true, maxHeight: 580 });
+    vrule(c, env, X(lx0 + cw - 150), cy + 60, cy + 60 + step * (n - 1) + 40, env.acc, 70);
+    vtext(c, env, strip(s.sub), X(lx0 + cw - 210), cy + 120, 42, 52, DARK, 80, { font: F_SERIF, weight: 700, alpha: .82, pop: false, stagger: .06, maxHeight: 500 });
   },
   fan(B) {
-    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); const cx = 640; const fw = 720, fh = 420;
-    watermark(c, env, chars[0] || '行', X(cx + 120), 720, 760, 0);
-    tag(c, env, X(180), 340, s.label + ' · ' + s.name, 0);
-    picture(c, env, img, X(cx - fw / 2), 400, fw, fh, 'fan', 20, { stroke: ink });
-    const size = Math.min(122, Math.floor(880 / n)), step = size * 1.05, span = step * (n - 1);
-    chars.forEach((ch, i) => bigChar(c, env, ch, X(cx - span / 2 + i * step), 1010, size, ink, 40 + i * 5, (hash(i * 7 + s.idx) - .5) * .05));
-    brush(c, env, X(cx - span / 2 - size * .6), X(cx + span / 2 + size * .6), 1010 + size * .5 + 26, acc, 90);
-    text(c, env, s.sub, X(cx), 1215, 52, ink, 60, { align: 'center', spacing: 5 });
-    text(c, env, s.source, X(cx), 1280, 28, ink, 50, { align: 'center', font: F_SANS, weight: 500, alpha: .72 });
-    seal(c, env, X(cx + 330), 1250, s.seal, 20, 58);
+    const { c, env, s, X, chars, ink, acc, img } = B; const n = Math.max(chars.length, 1); 
+    const cx = 540; const fw = 680, fh = 390;
+    watermark(c, env, chars[0] || '行', X(cx + 100), 700, 680, 0);
+    tag(c, env, X(140), 330, s.label + ' · ' + s.name, 0);
+    
+    // Fan picture centered exactly on screen
+    picture(c, env, img, X(cx - fw / 2), 380, fw, fh, 'fan', 20, { stroke: ink });
+    
+    // Character row below fan with generous spacing
+    const size = Math.min(116, Math.floor(760 / n)), step = size * 1.04, span = step * (n - 1);
+    chars.forEach((ch, i) => bigChar(c, env, ch, X(cx - span / 2 + i * step), 960, size, ink, 40 + i * 5, (hash(i * 7 + s.idx) - .5) * .05));
+    brush(c, env, X(cx - span / 2 - size * .5), X(cx + span / 2 + size * .5), 960 + size * .5 + 24, acc, 90);
+    
+    // Text strictly centered and bounded by maxWidth
+    text(c, env, s.sub, X(cx), 1130, 46, ink, 60, { align: 'center', spacing: 4, maxWidth: 720 });
+    text(c, env, s.source, X(cx), 1195, 26, ink, 50, { align: 'center', font: F_SANS, weight: 500, alpha: .72, maxWidth: 600 });
+    seal(c, env, X(cx + Math.min(340, Math.max(180, span / 2 + 70))), 1150, s.seal, 20, 56);
   },
   scroll(B) {
-    const { c, env, s, X, chars, ink, img } = B; const n = Math.max(chars.length, 1); const lx0 = 170, py = 560, pw = 880, ph = 430;
-    watermark(c, env, chars[0] || '行', X(lx0 + 760), 360, 440, 0);
-    text(c, env, s.label + ' · ' + s.name, X(lx0 + 30), 520, 34, ink, 20, { font: F_KAI, weight: 400, alpha: .85, spacing: 6 });
-    brush(c, env, X(lx0 + 30), X(lx0 + 300), 532, env.acc, 30);
+    const { c, env, s, X, chars, ink, img } = B; const n = Math.max(chars.length, 1); 
+    const lx0 = 160, py = 520, pw = 760, ph = 440;
+    watermark(c, env, chars[0] || '行', X(lx0 + 640), 360, 420, 0);
+    tag(c, env, X(lx0 + 40), 450, s.label + ' · ' + s.name, 0);
     scrollPaper(c, env, X(lx0), py, pw, ph, 0);
-    picture(c, env, img, X(lx0 + 56), py + 64, 300, 300, 'rect', 40, { stroke: DARK, r: 6, mat: false });
-    const size = Math.min(96, Math.floor(470 / n));
-    text(c, env, chars.join(''), X(lx0 + 400), py + 175, size, DARK, 60, { font: F_KAI, weight: 400, spacing: 6 });
-    brush(c, env, X(lx0 + 400), X(lx0 + 400 + size * n + 10), py + 205, env.acc, 90);
-    text(c, env, s.sub, X(lx0 + 402), py + 268, 40, DARK, 70, { spacing: 2 });
-    text(c, env, s.source, X(lx0 + 402), py + 322, 25, DARK, 60, { font: F_SANS, weight: 500, alpha: .7 });
-    seal(c, env, X(lx0 + pw - 60), py + ph - 68, s.seal, 40, 56);
+    
+    // Picture on left of parchment
+    const pwImg = 270, phImg = 330;
+    picture(c, env, img, X(lx0 + 44), py + 55, pwImg, phImg, 'rect', 40, { stroke: DARK, r: 8, mat: false });
+    
+    // Text cleanly inside right of parchment with maxWidth
+    const tx = lx0 + 345;
+    const availW = pw - 345 - 55;
+    const size = Math.min(84, Math.floor(availW / n));
+    text(c, env, chars.join(''), X(tx), py + 150, size, DARK, 60, { font: F_KAI, weight: 400, spacing: 5, maxWidth: availW });
+    brush(c, env, X(tx), X(tx + Math.min(availW, size * n + 10)), py + 178, env.acc, 90);
+    text(c, env, s.sub, X(tx + 2), py + 235, 34, DARK, 70, { spacing: 2, maxWidth: availW });
+    text(c, env, s.source, X(tx + 2), py + 285, 24, DARK, 60, { font: F_SANS, weight: 500, alpha: .7, maxWidth: availW });
+    seal(c, env, X(lx0 + pw - 65), py + ph - 65, s.seal, 40, 52);
   },
 };
 
@@ -455,7 +516,32 @@ function rigWalker(c, env, wk, st, umbK, lan) {
   c.save(); c.rotate(sway); c.lineCap = 'round'; c.lineJoin = 'round';
   const seg = (x1, y1, x2, y2, x3, y3, w) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.lineTo(x3, y3); c.lineWidth = w; c.stroke(); };
   const arm = (A, w) => { if (wide) { c.strokeStyle = ink; seg(sh.x, sh.y, A.ex, A.ey, A.hx, A.hy, 13); c.strokeStyle = fill; seg(sh.x, sh.y, A.ex, A.ey, A.hx, A.hy, 9); } else { c.strokeStyle = ink; seg(sh.x, sh.y, A.ex, A.ey, A.hx, A.hy, w || 3.2); } c.strokeStyle = ink; c.fillStyle = fill; c.lineWidth = 2.2; dot(c, A.hx, A.hy, 3.4); c.beginPath(); c.arc(A.hx, A.hy, 3.4, 0, TAU); c.stroke(); };
-  const leg = (L, w) => { c.strokeStyle = ink; seg(0, hipY, L.kx, hipY + L.ky, L.fx, hipY + L.fy, w); c.lineWidth = w + .4; c.beginPath(); c.moveTo(L.fx - 2, hipY + L.fy); c.lineTo(L.fx + 10, hipY + L.fy - L.sw * 3); c.stroke(); if (st === 'traveler') { c.fillStyle = ink; c.beginPath(); c.ellipse(L.fx + 4, hipY + L.fy, 8, 3.5, -L.sw * .3, 0, TAU); c.fill(); } };
+  const leg = (L, w, isNear) => { 
+    c.strokeStyle = ink; 
+    seg(0, hipY, L.kx, hipY + L.ky, L.fx, hipY + L.fy, w); 
+    c.lineWidth = w + .4; 
+    c.beginPath(); 
+    c.moveTo(L.fx - 2, hipY + L.fy); 
+    c.lineTo(L.fx + 10, hipY + L.fy - L.sw * 2.5); 
+    c.stroke(); 
+    if (st === 'traveler') { 
+      c.fillStyle = ink; 
+      c.beginPath(); 
+      c.ellipse(L.fx + 4, hipY + L.fy, 8, 3.5, -L.sw * .3, 0, TAU); 
+      c.fill(); 
+    } else if (st === 'girl') {
+      c.fillStyle = acc;
+      c.beginPath();
+      c.ellipse(L.fx + 4, hipY + L.fy, 6.5, 3, -L.sw * .2, 0, TAU);
+      c.fill();
+    } else {
+      // Scholar & Monk traditional cloth shoes
+      c.fillStyle = ink;
+      c.beginPath();
+      c.ellipse(L.fx + 4, hipY + L.fy, 7, 3.2, -L.sw * .25, 0, TAU);
+      c.fill();
+    }
+  };
   const staff = A => { c.strokeStyle = ink; c.lineWidth = 3; const bx = A.hx + 10 + Math.sin(ph) * 8; c.beginPath(); c.moveTo(A.hx - 6 + (bx - A.hx) * -.7, A.hy - 60); c.lineTo(bx, 0); c.stroke(); if (st === 'monk') { const tx = A.hx - 6 + (bx - A.hx) * -.7, ty = A.hy - 60; c.lineWidth = 2.2; c.beginPath(); c.arc(tx, ty - 10, 10, 0, TAU); c.stroke(); c.beginPath(); c.arc(tx - 6, ty - 12, 3, 0, TAU); c.arc(tx + 6, ty - 12, 3, 0, TAU); c.stroke(); } };
   // ---- 后层 ----
   if (st === 'traveler') { c.fillStyle = acc; c.strokeStyle = ink; c.lineWidth = 2; rr(c, sh.x - 21, sh.y + 2, 15, 32, 5); c.fill(); c.stroke(); }
@@ -464,20 +550,51 @@ function rigWalker(c, env, wk, st, umbK, lan) {
   if (wk.scarf) { c.strokeStyle = env.accA(.9); c.lineWidth = 7; c.beginPath(); c.moveTo(neck.x - 2, neck.y + 4); c.quadraticCurveTo(neck.x - 20, neck.y + 2 + Math.sin(t * 3) * 5, neck.x - 40, neck.y + 10 + Math.sin(t * 3 + 1) * 7); c.stroke(); }
   arm(farArm);
   if (holdStaff) staff(farArm);
-  leg(farLeg, st === 'traveler' ? 4.6 : 3.4);
-  // ---- 身体 ----
+  
+  // Both legs rendered BEFORE body so robe/clothes naturally and cleanly cover thighs and pelvis
+  leg(farLeg, st === 'traveler' ? 4.4 : 3.2, false);
+  leg(nearLeg, st === 'traveler' ? 4.8 : 3.6, true);
+  
+  // ---- 身体(袍服/衣服层层叠合在双腿上方) ----
   if (wide) {
-    const hem = st === 'girl' ? 54 : 40, hw = st === 'girl' ? 25 : 18, swg = Math.sin(ph) * 5, wv = Math.sin(t * 6) * 2;
-    c.fillStyle = fill; c.strokeStyle = ink; c.lineWidth = 2.6; c.beginPath(); c.moveTo(sh.x - 11, sh.y + 2); c.lineTo(sh.x + 11, sh.y + 2); c.lineTo(hw + swg + 6, hipY + hem); c.quadraticCurveTo(swg, hipY + hem + 6 + wv, -hw + swg, hipY + hem); c.closePath(); c.fill(); c.stroke();
+    const hem = st === 'girl' ? 44 : 36, hw = st === 'girl' ? 22 : 18, swg = Math.sin(ph) * 4, wv = Math.sin(t * 6) * 1.5;
+    c.fillStyle = fill; c.strokeStyle = ink; c.lineWidth = 2.6; c.beginPath(); 
+    c.moveTo(sh.x - 11, sh.y + 2); 
+    c.lineTo(sh.x + 11, sh.y + 2); 
+    c.lineTo(hw + swg + 5, hipY + hem); 
+    c.quadraticCurveTo(swg, hipY + hem + 4 + wv, -hw + swg, hipY + hem); 
+    c.closePath(); 
+    c.fill(); 
+    c.stroke();
+    
+    // Robe folds & natural drape
+    c.strokeStyle = env.inkA(0.35); c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(sh.x - 2, hipY); c.lineTo(swg, hipY + hem - 2); c.stroke();
+    
+    // Collar & Belt details
+    c.strokeStyle = ink; c.lineWidth = 2.2;
     c.beginPath(); c.moveTo(sh.x + 8, sh.y + 4); c.quadraticCurveTo(sh.x - 4, hipY - 12, 4, hipY + 2); c.stroke();
-    if (st === 'monk') { c.strokeStyle = env.accA(.75); c.lineWidth = 6; c.beginPath(); c.moveTo(sh.x - 10, sh.y + 4); c.lineTo(10, hipY + 6); c.stroke(); c.fillStyle = ink; for (let i = 0; i < 7; i++) { const a = .3 + i * .4; dot(c, neck.x + Math.cos(a) * 12 - 3, neck.y + 6 + Math.sin(a) * 9, 1.6); } }
-    if (st === 'girl') { c.strokeStyle = acc; c.lineWidth = 4; c.beginPath(); c.moveTo(-9, hipY - 4); c.lineTo(11, hipY - 4); c.stroke(); }
-    if (st === 'scholar') { c.strokeStyle = ink; c.lineWidth = 3; c.beginPath(); c.moveTo(-6, hipY - 6); c.lineTo(10, hipY - 6); c.stroke(); }
+    
+    if (st === 'monk') { 
+      c.strokeStyle = env.accA(.75); c.lineWidth = 6; c.beginPath(); c.moveTo(sh.x - 10, sh.y + 4); c.lineTo(10, hipY + 6); c.stroke(); 
+      c.fillStyle = ink; for (let i = 0; i < 7; i++) { const a = .3 + i * .4; dot(c, neck.x + Math.cos(a) * 12 - 3, neck.y + 6 + Math.sin(a) * 9, 1.6); } 
+    }
+    if (st === 'girl') { 
+      c.strokeStyle = acc; c.lineWidth = 3.6; c.beginPath(); c.moveTo(-10, hipY - 4); c.lineTo(12, hipY - 4); c.stroke(); 
+      c.strokeStyle = acc; c.lineWidth = 1.8; c.beginPath(); c.moveTo(1, hipY - 4); c.quadraticCurveTo(swg * 0.5 - 2, hipY + hem * 0.5, swg * 0.8 - 3, hipY + hem * 0.7); c.stroke();
+    }
+    if (st === 'scholar') { 
+      c.strokeStyle = ink; c.lineWidth = 2.8; c.beginPath(); c.moveTo(-8, hipY - 5); c.lineTo(10, hipY - 5); c.stroke(); 
+      c.strokeStyle = env.accA(0.8); c.lineWidth = 1.8; c.beginPath(); c.moveTo(0, hipY - 5); c.lineTo(swg * 0.5 - 2, hipY + hem * 0.55); c.stroke();
+    }
   } else {
-    const half = (hipY - sh.y) / 2; c.fillStyle = fill; c.strokeStyle = ink; c.lineWidth = 2.6; c.save(); c.translate(3, (sh.y + hipY) / 2); c.rotate(.06); rr(c, -11, -half - 6, 22, half * 2 + 12, 8); c.fill(); c.stroke(); c.restore();
+    // Traveler jacket and tunic
+    const half = (hipY - sh.y) / 2; 
+    c.fillStyle = fill; c.strokeStyle = ink; c.lineWidth = 2.6; c.save(); 
+    c.translate(3, (sh.y + hipY) / 2); c.rotate(.06); rr(c, -11, -half - 6, 22, half * 2 + 12, 8); c.fill(); c.stroke(); c.restore();
     c.strokeStyle = ink; c.lineWidth = 2; c.beginPath(); c.moveTo(sh.x - 6, sh.y + 4); c.lineTo(sh.x - 3, hipY - 2); c.stroke();
+    c.strokeStyle = acc; c.lineWidth = 3; c.beginPath(); c.moveTo(-8, hipY - 4); c.lineTo(10, hipY - 4); c.stroke();
   }
-  leg(nearLeg, st === 'traveler' ? 4.6 : 3.4);
   // ---- 头 ----
   c.strokeStyle = ink; c.lineWidth = 3; c.fillStyle = fill; c.beginPath(); c.arc(head.x, head.y, 11.5, 0, TAU); c.fill(); c.stroke();
   c.fillStyle = ink; dot(c, head.x + 5, head.y - 1, 1.6);
