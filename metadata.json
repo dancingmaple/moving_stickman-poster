@@ -1,0 +1,8 @@
+{
+  "name": "Remix MotionPoster Studio",
+  "description": "Create, customize, and export animated text poster skills with our intuitive web-based design and preview platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
